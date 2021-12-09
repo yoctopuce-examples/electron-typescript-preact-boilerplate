@@ -1,0 +1,14 @@
+
+:root {
+    font-family: sans-serif;
+    background-color: lightgray;
+}
+
+h1 {
+    text-align: center;
+}
+
+button {
+    margin: 2px;
+    border-radius: 5px;
+}

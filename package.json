@@ -1,0 +1,24 @@
+{
+  "name": "electron-typescript-preact-boilerplate",
+  "version": "1.0.0",
+  "description": "Boilerplate for an Electron app written in Typescript/JSX",
+  "main": "debug/index.js",
+  "scripts": {
+    "prebuild": "esbuild build/scripts.ts --platform=node --bundle --external:esbuild --external:ts-morph --outfile=build/scripts.js --log-level=warning",
+    "clean": "npm run prebuild && node build/scripts.js clean",
+    "generate-api": "npm run prebuild && node build/scripts.js generate-api",
+    "watch-api": "npm run prebuild && node build/scripts.js watch-api",
+    "build-dev": "npm run prebuild && node build/scripts.js build-dev",
+    "start-dev": "npm run prebuild && node build/scripts.js start-dev",
+    "build-prod": "npm run prebuild && node build/scripts.js build-prod",
+    "start-prod": "npm run build-prod && dist/electron"
+  },
+  "author": "Yoctopuce Sarl",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^16.0.1",
+    "esbuild": "^0.13.15",
+    "preact": "^10.6.0",
+    "ts-morph": "^13.0.2"
+  }
+}
