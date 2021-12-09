@@ -10,7 +10,6 @@ way in both directions. But for  safety reasons, the user interface process itse
 also divided into two distinct contexts:  
 
 ![The Electron architecture](README-image.electron-architecture.svg "The Electron architecture")  
-The Electron architecture
 
 This separation is needed so that the code interpreted in the browser has never a direct access 
 to the low level primitives of Node.js, otherwise the simple display of a page taken from an 
@@ -139,7 +138,6 @@ To illustrate this, here is the resulting execution and communication flow chart
 
 ![Execution and communication flows of the application](README-image.call-flow.svg 
 "Execution and communication flows of the application")  
-Execution and communication flows of the application
  
 We must admit that this is quite a maze, but at least you know exactly the use of each file, 
 and nothing is done behind your back :-)  
@@ -193,7 +191,7 @@ public log(msg: string): void
   
 then the generator adds to the `preloadAPI` interface the following declarations:  
 ```ts
-export type LogCallback \= (msg: string) \=> void;  
+export type LogCallback = (msg: string) => void;  
 ...  
 export interface PreloadAPI {  
         ...  
@@ -225,9 +223,9 @@ export class MainAPI
     constructor()  
     {  
         // Instantiate background tasks and helpers  
-        this.logging \= new Logging();  
-        this.yoctoMonitor \= new YoctoMonitor(\['127.0.0.1'\]);  
-        this.dbAccess \= new DBAccessor();  
+        this.logging = new Logging();  
+        this.yoctoMonitor = new YoctoMonitor(\['127.0.0.1'\]);  
+        this.dbAccess = new DBAccessor();  
     }  
     ...  
 }
