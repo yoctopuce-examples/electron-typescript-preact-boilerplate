@@ -19,6 +19,7 @@ async function watcher()
         sourcemap: true,
         platform: 'neutral',
         target: 'es2018',
+        loader: { '.png': 'dataurl' },
         outfile: 'debug/ui.js',
     })
 
