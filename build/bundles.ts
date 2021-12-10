@@ -2,6 +2,8 @@ import * as esbuild from 'esbuild';
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { MiniAsarWriter } from './MiniAsarWriter.js'
+
 export async function buildMain(devmode: boolean): Promise<esbuild.BuildResult>
 {
     // bundle main process code
@@ -20,18 +22,20 @@ export async function buildMain(devmode: boolean): Promise<esbuild.BuildResult>
         outfile: 'index.js',
         write: false
     });
-    // add a runtime package.json created from project package.json
-    let devPkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-    let runPkg: any = {};
-    for(let key in devPkg) {
-        if(['name','version','description','author','license'].includes(key)) {
-            runPkg[key] = (devPkg as any)[key];
+    if(result.outputFiles) {
+        // add a runtime package.json created from project package.json
+        let devPkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+        let runPkg: any = {};
+        for(let key in devPkg) {
+            if(['name','version','description','author','license'].includes(key)) {
+                runPkg[key] = (devPkg as any)[key];
+            }
         }
+        runPkg['main'] = 'index.js';
+        runPkg['scripts'] = { 'start': 'npx electron .' };
+        let pkgJson = JSON.stringify(runPkg);
+        result.outputFiles.push({ path:'package.json', contents: Buffer.from(pkgJson), text: pkgJson });
     }
-    runPkg['main'] = 'index.js';
-    runPkg['scripts'] = { 'start': 'npx electron .' };
-    let pkgJson = JSON.stringify(runPkg);
-    result.outputFiles.push({ path:'package.json', contents: Buffer.from(pkgJson), text: pkgJson });
 
     return result;
 }
@@ -69,12 +73,15 @@ export async function buildApp(devmode: boolean): Promise<esbuild.BuildResult>
         platform: 'neutral',
         target: 'es2018',
         sourcemap: devmode,
+        loader: { '.png': 'dataurl' },
         outfile: 'ui.js',
         write: false
     })
-    // add root HTML file
-    let appHtml: string = fs.readFileSync('./src/UI/App.html', 'utf8');
-    result.outputFiles.push({ path:'App.html', contents: Buffer.from(appHtml), text: appHtml });
+    if(result.outputFiles) {
+        // add root HTML file
+        let appHtml: string = fs.readFileSync('./src/UI/App.html', 'utf8');
+        result.outputFiles.push({path: 'App.html', contents: Buffer.from(appHtml), text: appHtml});
+    }
 
     return result;
 }
@@ -82,7 +89,7 @@ export async function buildApp(devmode: boolean): Promise<esbuild.BuildResult>
 export async function bundleToDisk(devmode: boolean, destDir: string)
 {
     let writer = (buildResult: esbuild.BuildResult) => {
-        for(let file of buildResult.outputFiles) {
+        for(let file of buildResult.outputFiles || []) {
             fs.writeFileSync(path.join(destDir, path.basename(file.path)), file.contents);
         }
     }
@@ -94,42 +101,20 @@ export async function bundleToDisk(devmode: boolean, destDir: string)
     return Promise.all(builders);
 }
 
-// Helper for little-endian encoding
-function leEncode(val: number)
-{
-    let bytes: number[] = [ val&0xff, (val>>8)&0xff, (val>>16)&0xff, (val>>24)&0xff ];
-    return bytes.map((c: number) => String.fromCharCode(c)).join('');
-}
-
-// Quick'n dirty "asar" file writer: we don't need all the globbing, etc. functions
-// that would come by importing the whole asar package. Even the integrity feature
-// brings no security as the checksum is written in the same file... So let's make
-// it deadly simple, this is what the "asar" file format was devised for !
 export async function bundleToAsar(devmode: boolean, destFile: string)
 {
-    let index = {files:{}};
-    let data = '';
-    let append = (buildResult: esbuild.BuildResult) => {
-        for(let file of buildResult.outputFiles) {
-            index.files[path.basename(file.path)] = {
-                offset: data.length.toString(),
-                size: file.text.length,
-                executable: false
-            };
-            data += file.text;
+    let asarWriter = new MiniAsarWriter();
+    let addFilesToAsar = (buildResult: esbuild.BuildResult) => {
+        for(let file of buildResult.outputFiles || []) {
+            asarWriter.addFile(path.basename(file.path), file.text);
         }
     }
     let builders: Promise<void>[] = [
-        buildMain(devmode).then(append),
-        buildPreload(devmode).then(append),
-        buildApp(devmode).then(append)
+        buildMain(devmode).then(addFilesToAsar),
+        buildPreload(devmode).then(addFilesToAsar),
+        buildApp(devmode).then(addFilesToAsar)
     ];
     await Promise.all(builders);
-    let indexStr: string = JSON.stringify(index);
-    let indexLen: number = indexStr.length;
-    let header: Buffer = Buffer.alloc(16);
-    [ 4, indexLen+8, indexLen+4, indexLen ].map((value, idx) => {
-        header.writeInt32LE(value, 4*idx)
-    });
-    fs.writeFileSync(destFile, header.toString('binary')+indexStr+data, 'binary');
+
+    fs.writeFileSync(destFile, asarWriter.makeArchive(), 'binary');
 }

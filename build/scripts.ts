@@ -55,7 +55,7 @@ async function buildAll(devmode: boolean)
 
 export async function watchAll(): Promise<void>
 {
-    let subprocess: child_process.ChildProcess = null;
+    let subprocess: child_process.ChildProcess | null = null;
     let building: boolean = true;
     let changed: boolean = true;
     let rebuildAndStart = async () => {

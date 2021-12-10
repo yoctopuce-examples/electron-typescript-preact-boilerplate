@@ -11,7 +11,7 @@
     "build-dev": "npm run prebuild && node build/scripts.js build-dev",
     "start-dev": "npm run prebuild && node build/scripts.js start-dev",
     "build-prod": "npm run prebuild && node build/scripts.js build-prod",
-    "start-prod": "npm run build-prod && dist/electron"
+    "start-prod": "npm run build-prod && cd dist && electron"
   },
   "author": "Yoctopuce Sarl",
   "license": "MIT",

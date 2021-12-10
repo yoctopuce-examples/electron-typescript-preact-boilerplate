@@ -356,6 +356,33 @@ var ElectronAPIProcessor = class {
 var esbuild = __toModule(require("esbuild"));
 var fs = __toModule(require("fs"));
 var path = __toModule(require("path"));
+
+// build/MiniAsarWriter.ts
+var MiniAsarWriter = class {
+  constructor() {
+    this.index = { files: {} };
+    this.data = "";
+  }
+  addFile(filename, content) {
+    this.index.files[filename] = {
+      offset: this.data.length.toString(),
+      size: content.length,
+      executable: false
+    };
+    this.data += content;
+  }
+  makeArchive() {
+    let indexStr = JSON.stringify(this.index);
+    let indexLen = indexStr.length;
+    let header = Buffer.alloc(16);
+    [4, indexLen + 8, indexLen + 4, indexLen].map((value, idx) => {
+      header.writeInt32LE(value, 4 * idx);
+    });
+    return header.toString("binary") + indexStr + this.data;
+  }
+};
+
+// build/bundles.ts
 async function buildMain(devmode) {
   let main = devmode ? "./src/dev-main.ts" : "./src/prod-main.ts";
   let result = await esbuild.build({
@@ -372,17 +399,19 @@ async function buildMain(devmode) {
     outfile: "index.js",
     write: false
   });
-  let devPkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
-  let runPkg = {};
-  for (let key in devPkg) {
-    if (["name", "version", "description", "author", "license"].includes(key)) {
-      runPkg[key] = devPkg[key];
+  if (result.outputFiles) {
+    let devPkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+    let runPkg = {};
+    for (let key in devPkg) {
+      if (["name", "version", "description", "author", "license"].includes(key)) {
+        runPkg[key] = devPkg[key];
+      }
     }
+    runPkg["main"] = "index.js";
+    runPkg["scripts"] = { "start": "npx electron ." };
+    let pkgJson = JSON.stringify(runPkg);
+    result.outputFiles.push({ path: "package.json", contents: Buffer.from(pkgJson), text: pkgJson });
   }
-  runPkg["main"] = "index.js";
-  runPkg["scripts"] = { "start": "npx electron ." };
-  let pkgJson = JSON.stringify(runPkg);
-  result.outputFiles.push({ path: "package.json", contents: Buffer.from(pkgJson), text: pkgJson });
   return result;
 }
 async function buildPreload(devmode) {
@@ -413,16 +442,19 @@ async function buildApp(devmode) {
     platform: "neutral",
     target: "es2018",
     sourcemap: devmode,
+    loader: { ".png": "dataurl" },
     outfile: "ui.js",
     write: false
   });
-  let appHtml = fs.readFileSync("./src/UI/App.html", "utf8");
-  result.outputFiles.push({ path: "App.html", contents: Buffer.from(appHtml), text: appHtml });
+  if (result.outputFiles) {
+    let appHtml = fs.readFileSync("./src/UI/App.html", "utf8");
+    result.outputFiles.push({ path: "App.html", contents: Buffer.from(appHtml), text: appHtml });
+  }
   return result;
 }
 async function bundleToDisk(devmode, destDir) {
   let writer = (buildResult) => {
-    for (let file of buildResult.outputFiles) {
+    for (let file of buildResult.outputFiles || []) {
       fs.writeFileSync(path.join(destDir, path.basename(file.path)), file.contents);
     }
   };
@@ -434,31 +466,19 @@ async function bundleToDisk(devmode, destDir) {
   return Promise.all(builders);
 }
 async function bundleToAsar(devmode, destFile) {
-  let index = { files: {} };
-  let data = "";
-  let append = (buildResult) => {
-    for (let file of buildResult.outputFiles) {
-      index.files[path.basename(file.path)] = {
-        offset: data.length.toString(),
-        size: file.text.length,
-        executable: false
-      };
-      data += file.text;
+  let asarWriter = new MiniAsarWriter();
+  let addFilesToAsar = (buildResult) => {
+    for (let file of buildResult.outputFiles || []) {
+      asarWriter.addFile(path.basename(file.path), file.text);
     }
   };
   let builders = [
-    buildMain(devmode).then(append),
-    buildPreload(devmode).then(append),
-    buildApp(devmode).then(append)
+    buildMain(devmode).then(addFilesToAsar),
+    buildPreload(devmode).then(addFilesToAsar),
+    buildApp(devmode).then(addFilesToAsar)
   ];
   await Promise.all(builders);
-  let indexStr = JSON.stringify(index);
-  let indexLen = indexStr.length;
-  let header = Buffer.alloc(16);
-  [4, indexLen + 8, indexLen + 4, indexLen].map((value, idx) => {
-    header.writeInt32LE(value, 4 * idx);
-  });
-  fs.writeFileSync(destFile, header.toString("binary") + indexStr + data, "binary");
+  fs.writeFileSync(destFile, asarWriter.makeArchive(), "binary");
 }
 
 // build/scripts.ts
@@ -538,7 +558,7 @@ async function watchAll() {
 }
 function clean(dir) {
   fs2.readdirSync(dir).forEach((entry) => {
-    if (/[^.].*[.](js|map)/.test(entry)) {
+    if (/[^.].*[.](js|map|html|css)/.test(entry)) {
       let fullpath = path2.join(dir, entry);
       let filestat = fs2.statSync(fullpath);
       if (!filestat.isDirectory()) {
