@@ -19,7 +19,7 @@ async function watcher()
         sourcemap: true,
         platform: 'neutral',
         target: 'es2018',
-        loader: { '.png': 'dataurl' },
+        loader: { '.png': 'dataurl', '.svg': 'dataurl' },
         outfile: 'debug/ui.js',
     })
 
@@ -29,8 +29,12 @@ async function watcher()
     const rebuild = async (): Promise<void> => {
         console.log("watcher: Rebuild and restart UI");
         do {
-            changed = false;
-            if(appBuilder.rebuild) await appBuilder.rebuild();
+            try {
+                changed = false;
+                if(appBuilder.rebuild) await appBuilder.rebuild();
+            } catch(e) {
+                console.log(e);
+            }
         } while(changed);
         building = false;
         mainAPI.restartUI();
