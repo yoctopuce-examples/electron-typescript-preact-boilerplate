@@ -58,24 +58,32 @@ export async function watchAll(): Promise<void>
     let subprocess: child_process.ChildProcess | null = null;
     let building: boolean = true;
     let changed: boolean = true;
+    let buildError: boolean = false;
     let rebuildAndStart = async () => {
         console.log('Rebuilding application, then starting Electron in dev mode');
-        do {
+        try {
             do {
-                changed = false;
-                await mirrorSafeAPI();
-            } while(changed);
-            await bundleToDisk(true, './debug');
-        } while(changed);
-        console.log('Rebuild done');
-        building = false;
-        subprocess = child_process.spawn('npx.cmd',['electron','debug'],{ stdio: 'inherit' });
-        subprocess.on('exit', (exitCode: number) => {
-            if(!building) {
-                console.error('Electron terminated by user, exiting watch mode.')
-                process.exit(exitCode);
-            }
-        });
+                do {
+                    changed = false;
+                    await mirrorSafeAPI();
+                } while (changed);
+                await bundleToDisk(true, './debug');
+            } while (changed);
+            console.log('Rebuild done');
+            buildError = false;
+            building = false;
+            subprocess = child_process.spawn('npx.cmd',['electron','debug'],{ stdio: 'inherit' });
+            subprocess.on('exit', (exitCode: number) => {
+                if(!building && !buildError) {
+                    console.error('Electron terminated by user, exiting watch mode.')
+                    process.exit(exitCode);
+                }
+            });
+        } catch(e) {
+            buildError = true;
+            building = false;
+            console.log(e);
+        }
     }
     rebuildAndStart();
     fs.watch('./src/Main', (eventType: any, filename: string) => {

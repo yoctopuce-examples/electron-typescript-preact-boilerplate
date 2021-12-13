@@ -526,24 +526,32 @@ async function watchAll() {
   let subprocess = null;
   let building = true;
   let changed = true;
+  let buildError = false;
   let rebuildAndStart = async () => {
     console.log("Rebuilding application, then starting Electron in dev mode");
-    do {
+    try {
       do {
-        changed = false;
-        await mirrorSafeAPI();
+        do {
+          changed = false;
+          await mirrorSafeAPI();
+        } while (changed);
+        await bundleToDisk(true, "./debug");
       } while (changed);
-      await bundleToDisk(true, "./debug");
-    } while (changed);
-    console.log("Rebuild done");
-    building = false;
-    subprocess = child_process.spawn("npx.cmd", ["electron", "debug"], { stdio: "inherit" });
-    subprocess.on("exit", (exitCode) => {
-      if (!building) {
-        console.error("Electron terminated by user, exiting watch mode.");
-        process.exit(exitCode);
-      }
-    });
+      console.log("Rebuild done");
+      buildError = false;
+      building = false;
+      subprocess = child_process.spawn("npx.cmd", ["electron", "debug"], { stdio: "inherit" });
+      subprocess.on("exit", (exitCode) => {
+        if (!building && !buildError) {
+          console.error("Electron terminated by user, exiting watch mode.");
+          process.exit(exitCode);
+        }
+      });
+    } catch (e) {
+      buildError = true;
+      building = false;
+      console.log(e);
+    }
   };
   rebuildAndStart();
   fs2.watch("./src/Main", (eventType, filename) => {
