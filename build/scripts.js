@@ -498,12 +498,16 @@ async function watchSafeAPI() {
       changed = false;
       await mirrorSafeAPI();
     } while (changed);
-    building = false;
+    setTimeout(() => {
+      building = false;
+    }, 1500);
   };
+  rebuild();
   fs2.watch("./src/Main", async (eventType, filename) => {
     if (filename != "mainHandlers.ts") {
       changed = true;
       if (!building) {
+        console.log("File " + filename + " changed");
         building = true;
         rebuild();
       }

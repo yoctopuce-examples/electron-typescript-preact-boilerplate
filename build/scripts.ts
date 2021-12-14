@@ -26,12 +26,14 @@ export async function watchSafeAPI(): Promise<void>
             changed = false;
             await mirrorSafeAPI();
         } while(changed);
-        building = false;
+        setTimeout(() => { building = false; }, 1500);
     }
+    rebuild();
     fs.watch('./src/Main', async (eventType: any, filename: string) => {
         if(filename != 'mainHandlers.ts') {
             changed = true;
             if(!building) {
+                console.log('File '+filename+' changed');
                 building = true;
                 rebuild();
             }
